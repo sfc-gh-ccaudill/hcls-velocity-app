@@ -10,6 +10,7 @@ A Next.js web application for tracking AI-focused use cases across the HCLS sale
 - **Manage**: Admin view for maintaining use case metadata and primary use case options
 - **Priority Use Cases**: P1-P3 use cases with activity logging (status updates, meeting notes, blockers, etc.)
 - **Team**: Weekly team activity view with member management (add/remove team members and their associated Snowflake accounts)
+- **SF Accounts**: Browse all Snowflake accounts with activity and team member associations
 - **Account Detail**: Drill into a specific account to view events and use cases
 
 ## Tech Stack
@@ -80,4 +81,4 @@ The app listens on port `8000` and uses OAuth (`/snowflake/session/token`) when 
 | `SNOWFLAKE_DATABASE` | Database name | `TEMP` |
 | `SNOWFLAKE_SCHEMA` | Schema name | `VELOCITY_AI` |
 | `SNOWFLAKE_WAREHOUSE` | Warehouse name | `SE_AD_WH` |
-| `SNOWFLAKE_ACCOUNT` | Account identifier (fallback) | `SFSENORTHAMERICA-CCAUDILL-AWS2` |
+| `SNOWFLAKE_ACCOUNT` | Account identifier (fallback) | `SFCOGSOPS-SNOWHOUSE_AWS_US_WEST_2` |
