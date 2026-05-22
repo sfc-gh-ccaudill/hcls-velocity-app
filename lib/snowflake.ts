@@ -10,7 +10,7 @@ let cachedToken: string | null = null;
 
 function getOAuthToken(): string | null {
   if (process.env.SNOWFLAKE_TOKEN) {
-    return process.env.SNOWFLAKE_TOKEN;
+    return process.env.SNOWFLAKE_TOKEN.trim();
   }
   if (process.env.SNOWFLAKE_PASSWORD) {
     return null;
@@ -18,7 +18,7 @@ function getOAuthToken(): string | null {
   const tokenPath = "/snowflake/session/token";
   try {
     if (fs.existsSync(tokenPath)) {
-      return fs.readFileSync(tokenPath, "utf8");
+      return fs.readFileSync(tokenPath, "utf8").trim();
     }
   } catch {
   }
@@ -26,39 +26,50 @@ function getOAuthToken(): string | null {
 }
 
 function parseTomlConnection(connectionName: string): Record<string, string> | null {
-  const tomlPath = path.join(process.env.HOME || "", ".snowflake", "config.toml");
-  try {
-    if (!fs.existsSync(tomlPath)) return null;
-    const content = fs.readFileSync(tomlPath, "utf8");
-    const lines = content.split("\n");
-    let inSection = false;
-    const config: Record<string, string> = {};
-    const sectionName = `connections.${connectionName}`.toLowerCase();
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        const section = trimmed.slice(1, -1).toLowerCase();
-        inSection = section === sectionName;
-        continue;
-      }
-      if (inSection && trimmed && !trimmed.startsWith("#")) {
-        const eqIndex = trimmed.indexOf("=");
-        if (eqIndex > 0) {
-          const key = trimmed.slice(0, eqIndex).trim();
-          let value = trimmed.slice(eqIndex + 1).trim();
-          if ((value.startsWith('"') && value.endsWith('"')) || 
-              (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
+  const homeDir = process.env.HOME || "";
+  const paths = [
+    path.join(homeDir, ".snowflake", "connections.toml"),
+    path.join(homeDir, ".snowflake", "config.toml"),
+  ];
+
+  for (const tomlPath of paths) {
+    try {
+      if (!fs.existsSync(tomlPath)) continue;
+      const content = fs.readFileSync(tomlPath, "utf8");
+      const lines = content.split("\n");
+      let inSection = false;
+      const config: Record<string, string> = {};
+      const sectionNames = [
+        connectionName.toLowerCase(),
+        `connections.${connectionName}`.toLowerCase(),
+      ];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          const section = trimmed.slice(1, -1).toLowerCase();
+          inSection = sectionNames.includes(section);
+          continue;
+        }
+        if (inSection && trimmed && !trimmed.startsWith("#")) {
+          const eqIndex = trimmed.indexOf("=");
+          if (eqIndex > 0) {
+            const key = trimmed.slice(0, eqIndex).trim();
+            let value = trimmed.slice(eqIndex + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'"))) {
+              value = value.slice(1, -1);
+            }
+            config[key] = value;
           }
-          config[key] = value;
         }
       }
+      if (Object.keys(config).length > 0) return config;
+    } catch {
+      continue;
     }
-    return Object.keys(config).length > 0 ? config : null;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 function getConfig(): snowflake.ConnectionOptions {
@@ -71,8 +82,8 @@ function getConfig(): snowflake.ConnectionOptions {
         account: tomlConfig.account || tomlConfig.accountname,
         username: tomlConfig.user || tomlConfig.username,
         warehouse: tomlConfig.warehouse,
-        database: process.env.SNOWFLAKE_DATABASE || "HCLS_ACCOUNTS",
-        schema: process.env.SNOWFLAKE_SCHEMA || "PUBLIC",
+        database: process.env.SNOWFLAKE_DATABASE || "TEMP",
+        schema: process.env.SNOWFLAKE_SCHEMA || "VELOCITY_AI",
         role: tomlConfig.role,
       };
 
@@ -85,6 +96,10 @@ function getConfig(): snowflake.ConnectionOptions {
         config.privateKey = fs.readFileSync(keyPath, "utf8");
       } else if (tomlConfig.authenticator?.toUpperCase() === "EXTERNALBROWSER") {
         config.authenticator = "EXTERNALBROWSER";
+      } else if (tomlConfig.authenticator?.toLowerCase() === "programmatic_access_token" && tomlConfig.token) {
+        config.authenticator = "programmatic_access_token";
+        config.token = tomlConfig.token.trim();
+        config.host = tomlConfig.host || process.env.SNOWFLAKE_HOST;
       } else if (tomlConfig.password) {
         config.password = tomlConfig.password;
       }
@@ -94,10 +109,10 @@ function getConfig(): snowflake.ConnectionOptions {
   }
 
   const base = {
-    account: process.env.SNOWFLAKE_ACCOUNT || "SFSENORTHAMERICA-CCAUDILL-AWS2",
+    account: process.env.SNOWFLAKE_ACCOUNT,
     warehouse: process.env.SNOWFLAKE_WAREHOUSE || "COMPUTE_WH",
-    database: process.env.SNOWFLAKE_DATABASE || "HCLS_ACCOUNTS",
-    schema: process.env.SNOWFLAKE_SCHEMA || "PUBLIC",
+    database: process.env.SNOWFLAKE_DATABASE || "TEMP",
+    schema: process.env.SNOWFLAKE_SCHEMA || "VELOCITY_AI",
   };
 
   const token = getOAuthToken();
@@ -113,14 +128,14 @@ function getConfig(): snowflake.ConnectionOptions {
   if (process.env.SNOWFLAKE_PASSWORD) {
     return {
       ...base,
-      username: process.env.SNOWFLAKE_USER || "CCAUDILL",
+      username: process.env.SNOWFLAKE_USER,
       password: process.env.SNOWFLAKE_PASSWORD,
     };
   }
 
   return {
     ...base,
-    username: process.env.SNOWFLAKE_USER || "CCAUDILL",
+    username: process.env.SNOWFLAKE_USER,
     authenticator: "EXTERNALBROWSER",
   };
 }
